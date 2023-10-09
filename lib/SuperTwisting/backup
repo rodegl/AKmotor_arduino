@@ -1,0 +1,108 @@
+current_time = millis();
+  if (current_time - prev_Time > (sample_time * 1000000)) {
+    cycle_time = current_time - prev_Time;
+    prev_Time = current_time;
+
+    if (Serial.available())
+    {
+      str = Serial.readStringUntil('\n');
+
+      for (int i = 0; i < dataLength; i++)
+      {
+        int index = str.indexOf(separator);
+        data[i] = str.substring(0, index).toFloat();
+        str = str.substring(index + 1);
+      }
+      /*
+      Roll.p_in = data[0];
+      Roll.v_in = data[1];
+      Roll.kp_in = data[2];
+      Roll.kd_in = data[3];
+      Roll.t_in = data[4]; */
+
+      ControlRoll.SetPoint = data[0];
+      ControlRoll.gainP =  data[1];
+      ControlRoll.gainI = data[2];
+      ControlRoll.gainD = data[3];
+
+      //t_in= constrain(t_in,T_MIN, T_MAX);
+      enable = data[4];
+      zero = data[5];
+      sine = data[6];
+
+      sample_time = data[7];
+
+      ControlRoll.k1 = data[8];
+      ControlRoll.k2 = data[9];
+
+      if(enable == 1) {   // ENABLE MOTOR
+        Roll.EnterMotorMode();
+      }
+
+      if(enable == 0) {   //DISABLE MOTOR
+        Roll.ExitMotorMode();
+      } 
+
+      if(zero == 1) {   //DISABLE MOTOR
+        Roll.Zero();
+        Roll.p_in = 0;
+        Roll.t_in = 0;
+        ControlRoll.delta1 = 0;
+        ControlRoll.delta2 = 0;
+      }
+      
+    }
+    
+    /*
+    if (sine  == 1) {
+      if ( (millis() - prev_Time2) > (0.001 * 1000)) {
+        prev_Time2 = millis();
+        i = i + 0.01;
+        Roll.p_in = 1.5 *sin(i);
+      }
+    }  */
+
+    vel_sp = (Roll.p_out - pos_prev) / sample_time;
+    pos_prev = Roll.p_out;
+    
+    // receive CAN
+    if(CAN.parsePacket()) {// check if data coming
+      Roll.unpack_reply();
+    } 
+
+    //Roll.t_in = ControlRoll.getOutput(Roll.p_out, sample_time); //PID control
+    Roll.t_in = ControlRoll.getOutputSP(Roll.p_out, sample_time, -Roll.v_out*3); //PID control
+    //Roll.t_in = ControlRoll.superTwisting(Roll.p_out, sample_time, ControlRoll.gainP, ControlRoll.gainD);
+
+    if (abs(Roll.p_out) > 2.5)
+    {
+      Roll.ExitMotorMode();
+    }
+
+    // send CAN  
+    Roll.pack_cmd();
+
+    //printf("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, ", Roll.p_out, -Roll.v_out*3, Roll.t_out, ControlRoll.SetPoint, enable, cycle_time);
+    //printf("%.2f, %.2f, %.2f, %.2f \n", ControlRoll.delta1, ControlRoll.negDelta2, vel_sp, ControlRoll.derivateE);
+
+  }
+
+  
+  current_time2 = millis();
+  
+  if (current_time2 - prev_Time2 > (uart_time * 1000)) // verifica que hayan pasado 10ms
+  {
+    //float diff = current_time2 - prev_Time2;
+    float serial_time = current_time2 - prev_Time2;
+    prev_Time2 = current_time2;
+    // SERIAL PORT WRITE
+    printf("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, ", Roll.p_out, -Roll.v_out*3, Roll.t_out, ControlRoll.SetPoint, enable, cycle_time);
+    printf("%.2f, %.2f, %.2f, %.2f, %.2f \n", ControlRoll.delta1, ControlRoll.negDelta2, vel_sp, ControlRoll.derivateE, serial_time);
+  } 
+
+
+  /*
+  while ((millis()-prev_Time) < (sample_time * 1000)){ }
+  cycle_time = (millis() - prev_Time);
+  prev_Time = millis(); */
+  
